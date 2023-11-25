@@ -24,7 +24,7 @@ class TelloException(Exception):
     pass
 
 
-@enforce_types
+# @enforce_types
 class Tello:
     """Python wrapper to interact with the Ryze Tello drone using the official Tello api.
     Tello API documentation:
@@ -38,14 +38,14 @@ class Tello:
     TIME_BTW_COMMANDS = 0.1  # in seconds
     TIME_BTW_RC_CONTROL_COMMANDS = 0.001  # in seconds
     RETRY_COUNT = 3  # number of retries after a failed command
-    TELLO_IP = '192.168.10.1'  # Tello IP address
+    TELLO_IP = "127.0.0.1"  # Tello IP address
 
     # Video stream, server socket
     VS_UDP_IP = '0.0.0.0'
     DEFAULT_VS_UDP_PORT = 11111
     VS_UDP_PORT = DEFAULT_VS_UDP_PORT
 
-    CONTROL_UDP_PORT = 8889
+    CONTROL_UDP_PORT = 8999
     STATE_UDP_PORT = 8890
 
     # Constants for video settings
@@ -88,8 +88,8 @@ class Tello:
     FLOAT_STATE_FIELDS = ('baro', 'agx', 'agy', 'agz')
 
     state_field_converters: Dict[str, Union[Type[int], Type[float]]]
-    state_field_converters = {key : int for key in INT_STATE_FIELDS}
-    state_field_converters.update({key : float for key in FLOAT_STATE_FIELDS})
+    state_field_converters = {key: int for key in INT_STATE_FIELDS}
+    state_field_converters.update({key: float for key in FLOAT_STATE_FIELDS})
 
     # VideoCapture object
     background_frame_read: Optional['BackgroundFrameRead'] = None
@@ -100,26 +100,29 @@ class Tello:
     def __init__(self,
                  host=TELLO_IP,
                  retry_count=RETRY_COUNT,
-                 vs_udp=VS_UDP_PORT):
+                 vs_udp=VS_UDP_PORT,
+                 control_port=CONTROL_UDP_PORT,
+                 state_port=STATE_UDP_PORT):
 
         global threads_initialized, client_socket, drones
 
-        self.address = (host, Tello.CONTROL_UDP_PORT)
+        self.address = (host, control_port)
         self.stream_on = False
         self.retry_count = retry_count
         self.last_received_command_timestamp = time.time()
         self.last_rc_control_timestamp = time.time()
+        self.state_port = state_port
 
         if not threads_initialized:
             # Run Tello command responses UDP receiver on background
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            client_socket.bind(("", Tello.CONTROL_UDP_PORT))
+            client_socket.bind(("", control_port))
             response_receiver_thread = Thread(target=Tello.udp_response_receiver)
             response_receiver_thread.daemon = True
             response_receiver_thread.start()
 
             # Run state UDP receiver on background
-            state_receiver_thread = Thread(target=Tello.udp_state_receiver)
+            state_receiver_thread = Thread(target=Tello.udp_state_receiver, args=[state_port])
             state_receiver_thread.daemon = True
             state_receiver_thread.start()
 
@@ -127,10 +130,9 @@ class Tello:
 
         drones[host] = {'responses': [], 'state': {}}
 
-        self.LOGGER.info("Tello instance was initialized. Host: '{}'. Port: '{}'.".format(host, Tello.CONTROL_UDP_PORT))
+        self.LOGGER.info("Tello instance was initialized. Host: '{}'. Port: '{}'.".format(host, control_port))
 
         self.vs_udp_port = vs_udp
-
 
     def change_vs_udp(self, udp_port):
         """Change the UDP Port for sending video feed from the drone.
@@ -171,14 +173,14 @@ class Tello:
                 break
 
     @staticmethod
-    def udp_state_receiver():
+    def udp_state_receiver(port=STATE_UDP_PORT):
         """Setup state UDP receiver. This method listens for state information from
         Tello. Must be run from a background thread in order to not block
         the main thread.
         Internal method, you normally wouldn't call this yourself.
         """
         state_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        state_socket.bind(("", Tello.STATE_UDP_PORT))
+        state_socket.bind(("", port))
 
         while True:
             try:
@@ -239,7 +241,7 @@ class Tello:
         return self.get_own_udp_object()['state']
 
     def get_state_field(self, key: str):
-        """Get a specific sate field by name.
+        """Get a specific state field by name.
         Internal method, you normally wouldn't call this yourself.
         """
         state = self.get_current_state()
@@ -486,7 +488,7 @@ class Tello:
             self.LOGGER.debug("Command attempt #{} failed for command: '{}'".format(i, command))
 
         self.raise_result_error(command, response)
-        return False # never reached
+        return False  # never reached
 
     def send_read_command(self, command: str) -> str:
         """Send given command to Tello and wait for its response.
@@ -522,8 +524,8 @@ class Tello:
         response = self.send_read_command(command)
         return float(response)
 
-    def raise_result_error(self, command: str, response: str) -> bool:
-        """Used to reaise an error after an unsuccessful command
+    def raise_result_error(self, command: str, response: str) -> None:
+        """Used to raise an error after an unsuccessful command
         Internal method, you normally wouldn't call this yourself.
         """
         tries = 1 + self.retry_count
@@ -720,7 +722,7 @@ class Tello:
         self.send_control_command(cmd)
 
     def curve_xyz_speed(self, x1: int, y1: int, z1: int, x2: int, y2: int, z2: int, speed: int):
-        """Fly to x2 y2 z2 in a curve via x1 y1 z1. Speed defines the traveling speed in cm/s.
+        """Fly to x2 y2 z2 in a curve via x2 y2 z2. Speed defines the traveling speed in cm/s.
 
         - Both points are relative to the current position
         - The current position and both points must form a circle arc.
@@ -753,7 +755,7 @@ class Tello:
         self.send_control_command(cmd)
 
     def curve_xyz_speed_mid(self, x1: int, y1: int, z1: int, x2: int, y2: int, z2: int, speed: int, mid: int):
-        """Fly to x2 y2 z2 in a curve via x1 y1 z1. Speed defines the traveling speed in cm/s.
+        """Fly to x2 y2 z2 in a curve via x2 y2 z2. Speed defines the traveling speed in cm/s.
 
         - Both points are relative to the mission pad with id mid.
         - The current position and both points must form a circle arc.
