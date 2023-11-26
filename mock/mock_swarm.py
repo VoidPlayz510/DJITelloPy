@@ -1,3 +1,4 @@
+import itertools
 from threading import Thread, Barrier
 from queue import Queue
 from typing import List, Callable
@@ -8,7 +9,13 @@ from mock.drone import TelloDrone
 
 class MockSwarm:
     def __init__(self, ips: List[str]):
-        self.tellos = [TelloDrone(ip) for ip in ips]
+        # Define different ports for command and state
+        command_ports = itertools.count(8889, 10)
+        state_ports = itertools.count(8890, 10)
+
+        self.tellos = [
+            TelloDrone(ip, next(command_ports), next(state_ports)) for ip in ips
+        ]
 
     def sequential(self, func: Callable[[int, TelloDrone], None]):
         for i, tello in enumerate(self.tellos):
