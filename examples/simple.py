@@ -1,6 +1,6 @@
 from djitellopy import Tello
 
-tello = Tello(host="127.0.0.1")
+tello = Tello('127.0.0.1')
 
 tello.connect()
 tello.takeoff()

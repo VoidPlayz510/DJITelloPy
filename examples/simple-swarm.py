@@ -1,8 +1,10 @@
 from djitellopy import TelloSwarm
 
 swarm = TelloSwarm.fromIps([
-    "127.0.0.1"
-], [8890], [8990])
+    "192.168.178.42",
+    "192.168.178.43",
+    "192.168.178.44"
+])
 
 swarm.connect()
 swarm.takeoff()
