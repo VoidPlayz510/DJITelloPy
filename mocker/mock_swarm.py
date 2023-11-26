@@ -4,7 +4,7 @@ from queue import Queue
 from typing import List, Callable
 import time
 
-from mock.drone import TelloDrone
+from mocker.drone import TelloDrone
 
 
 class MockSwarm:
